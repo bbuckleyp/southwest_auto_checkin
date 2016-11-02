@@ -1,0 +1,24 @@
+[user1]
+first_name = james
+last_name = buckley
+confirmation = 123ABC
+datetime = 2016-01-02 06:30:00+00:00
+
+[user2]
+first_name = brandon
+last_name = buckley
+confirmation = 123ABC
+datetime = 2016-01-02 06:30:00+00:00
+
+[user3]
+first_name = eric
+last_name = uriostigue
+confirmation = 123ABC
+datetime = 2016-01-02 06:30:00+00:00
+
+[user4]
+first_name = brandon
+last_name = buckley
+confirmation = ABCD1234
+datetime = 2016-01-02 17:35:00+00:00
+
