@@ -50,7 +50,7 @@ def open_connection(config):
         logging.critical("Cannot connect to the SMP Email Sever")
         return (False, connection)
 
-def utc_time(time, city, date):
+def utc_time(time, city, state, date):
     """ Given a city, converts the time passed in to UTC"""
 
     # modules needed to convert time to UTC
@@ -58,7 +58,7 @@ def utc_time(time, city, date):
     tz = tzwhere.tzwhere()
 
     #  Request longitutde/latitude values given a city input and find the corresponding timezone
-    place, (lat, lng) = geolocator.geocode(city)
+    place, (lat, lng) = geolocator.geocode('{}, {}'.format(city, state))
     timezone = tz.tzNameAt(lat, lng)
 
     # Convert time to UTC datetime
@@ -76,8 +76,10 @@ def parse_email(body):
     first_name = []
     last_name = []
     confirmation = []
+    email = []
     date = []
     city = []
+    state = []
     time = []
     datetime = []
 
@@ -92,51 +94,53 @@ def parse_email(body):
             # don't split if it's a city because it can have multiple words in a city (aka San Diego)
             if ':' in line or '-' in line:
                 if "city" in line: 
-                    print line
                     city.append(re.split('[:-]', line)[-1].strip())
+                elif "state" in line and '+' not in line:
+                    state.append(re.split('[:-]', line)[-1].strip())
                 else:
                     line = line.replace(" ", "")
+                    if '>' not in line and '<' not in line:
     
-                    if "firstname" in line or "first_name" in line: 
-                        first_name.append(re.split('[: -]',line)[-1].upper())
-                    elif "lastname" in line or "last_name" in line: 
-                        last_name.append(re.split('[: -]',line)[-1].upper())
-                    elif "confirmation" in line: 
-                        print line
-                        confirmation.append(re.split('[: -]',line)[-1].upper()) 
-                    elif "date" in line: 
-                        print line
-                        l = re.split('[: -]', line, 1)
-                        d = l[-1].replace('/', '-')
-                        
-                        # checking if year contains full 2016 etc not 16
-                        d_temp = d.split('-')
-                        if len(d_temp[-1]) < 4:
-                            d_temp[-1] = "20" + d_temp[-1]
-                            d = '-'.join(d_temp)
+                        if "firstname" in line or "first_name" in line: 
+                            first_name.append(re.split('[: -]',line)[-1].upper())
+                        elif "lastname" in line or "last_name" in line: 
+                            last_name.append(re.split('[: -]',line)[-1].upper())
+                        elif "confirmation" in line: 
+                            confirmation.append(re.split('[: -]',line)[-1].upper()) 
+                        elif "email" in line:
+                            email.append(re.split('[: -]',line)[-1].upper()) 
+                        elif "date" in line: 
+                            l = re.split('[: -]', line, 1)
+                            d = l[-1].replace('/', '-')
+                            
+                            # checking if year contains full 2016 etc not 16
+                            d_temp = d.split('-')
+                            if len(d_temp[-1]) < 4:
+                                d_temp[-1] = "20" + d_temp[-1]
+                                d = '-'.join(d_temp)
     
-                        date.append(d) # making sure all days are in consistent format with '-' instead of '/'
-                    elif "time" in line:
-                        l = line.replace('-', ':').split(':')
-                        hour = l[1]
-                        minute = l[2]
-                        
-                        # checking if am/pm is delcared and putting in 24 hour format
-                        if not l[-1].isdigit(): 
-                            minute = minute[:-2] # taking off am/pm declaration
-                        elif "pm" in l[-1]: 
-                            hour = str(int(hour) + 12)
+                            date.append(d) # making sure all days are in consistent format with '-' instead of '/'
+                        elif "time" in line:
+                            l = line.replace('-', ':').split(':')
+                            hour = l[1]
+                            minute = l[2]
+                            
+                            # checking if am/pm is delcared and putting in 24 hour format
+                            if not l[-1].isdigit(): 
+                                minute = minute[:-2] # taking off am/pm declaration
+                                if "pm" in l[-1]: 
+                                    hour = str(int(hour) + 12)
     
-                        time.append(hour + ':' + minute)
+                            time.append(hour + ':' + minute)
 
     # checking if there's at least 1 value entered for all data fields and it's consistent
-    print first_name, last_name, confirmation, date, time, city
-    if first_name >= 1 and len(first_name) == len(last_name) == len(confirmation) == len(date) == len(time) == len(city):
-        # convert time, city, date to UTC datetimes
+    print first_name, last_name, confirmation, date, time, city, state
+    if first_name >= 1 and len(first_name) == len(last_name) == len(confirmation) == len(date) == len(time) == len(city) == len(state):
+        # convert time, city, state, date to UTC datetimes
         for i in range(len(time)):
-            datetime.append(utc_time(time[i], city[i], date[i]))
+            datetime.append(utc_time(time[i], city[i], state[i], date[i]))
 
-        retval = {"first_name":first_name, "last_name":last_name, "confirmation":confirmation, "datetime":datetime}
+        retval = {"first_name":first_name, "last_name":last_name, "confirmation":confirmation, "email":email, "datetime":datetime}
         return True, retval
     else:
         return False, None
@@ -166,11 +170,7 @@ def main():
 
     # For the number of unseen emails, iterate through each one and extract data
     unread_count = int(connection.status(email_config["mailbox_id"], '(UNSEEN)')[1][0].split(" ")[2][0:1])
-    total_count = int(connection.select(email_config["mailbox_id"], readonly=True)[1][0]) #NOTE - readonly = True will not mark as read
-
-    print "Unread count = " + str(unread_count)
-    print "Total Count = " + str(total_count)
-    
+    total_count = int(connection.select(email_config["mailbox_id"], readonly=False)[1][0]) #NOTE - readonly = True will not mark as read
 
     # iterate through all unread emails
     num_users = 0
@@ -193,14 +193,16 @@ def main():
 
             # output data to text file
             for j in range(len(email_data["first_name"])):
-                print num_users
                 num_users += 1
                 f.write("[user{}]\n".format(num_users))
                 f.write("first_name = " + email_data["first_name"][j] + '\n')
                 f.write("last_name = " + email_data["last_name"][j] + '\n')
                 f.write("confirmation = " + email_data["confirmation"][j] + '\n')
+                f.write("email = " + email_data["email"][j] + '\n')
                 f.write("datetime = " + str(email_data["datetime"][j]) + '\n\n')
 
+    f.write("[info]\n")
+    f.write("num_users = " + str(num_users) + '\n')
     f.close()
 
     connection.close()
